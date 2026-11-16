@@ -135,7 +135,6 @@ document.addEventListener('mousemove', (e) => {
   const rect = document.querySelector('.island').getBoundingClientRect();
   mouseX = e.clientX - rect.left;
   mouseY = e.clientY - rect.top;
-  // Котик следит за курсором
   const mascot = document.getElementById('mascot');
   const mascotRect = mascot.getBoundingClientRect();
   const mascotX = mascotRect.left + mascotRect.width/2;
@@ -144,14 +143,14 @@ document.addEventListener('mousemove', (e) => {
   const distance = Math.min(3, Math.hypot(e.clientX - mascotX, e.clientY - mascotY) / 50);
   const pupilX = Math.cos(angle) * distance;
   const pupilY = Math.sin(angle) * distance;
-  document.getElementById('pupilL').setAttribute('transform', `translate(${pupilX}, ${pupilY})`);
-  document.getElementById('pupilR').setAttribute('transform', `translate(${pupilX}, ${pupilY})`);
+  document.getElementById('pupilL').setAttribute('transform', 'translate('+pupilX+', '+pupilY+')');
+  document.getElementById('pupilR').setAttribute('transform', 'translate('+pupilX+', '+pupilY+')');
 });
 function drawGradient() {
   hue = (hue + 0.5) % 360;
   const gradient = ctx.createRadialGradient(mouseX, mouseY, 0, mouseX, mouseY, 400);
-  gradient.addColorStop(0, `hsla(${hue}, 70%, 60%, 0.4)`);
-  gradient.addColorStop(0.5, `hsla(${(hue+60)%360}, 70%, 50%, 0.2)`);
+  gradient.addColorStop(0, 'hsla('+hue+', 70%, 60%, 0.4)');
+  gradient.addColorStop(0.5, 'hsla('+((hue+60)%360)+', 70%, 50%, 0.2)');
   gradient.addColorStop(1, 'transparent');
   ctx.clearRect(0, 0, canvas.width, canvas.height);
   ctx.fillStyle = gradient;
@@ -216,7 +215,7 @@ window.cancelEdit=function(){render();};
 window.saveTimer=function(){
   const h=parseInt(document.getElementById('editHours').value)||0;
   const m=parseInt(document.getElementById('editMinutes').value)||0;
-  tTime=h*60+m*1;
+  tTime=h*60+m;
   localStorage.setItem('island_timer',tTime);
   render();
 };

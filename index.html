@@ -59,10 +59,16 @@ body{background:transparent;font-family:-apple-system,Segoe UI,Roboto,sans-serif
 .nl{display:flex;flex-direction:column;gap:8px}
 .nit{padding:12px;background:var(--s);border-radius:12px;display:flex;justify-content:space-between;align-items:start}
 .nd{background:none;border:none;color:#ff453a;cursor:pointer;font-size:18px;padding:4px 8px}
-.td{font-size:72px;font-weight:200;text-align:center;margin:40px 0;font-variant-numeric:tabular-nums}
+.td{font-size:72px;font-weight:200;text-align:center;margin:40px 0;font-variant-numeric:tabular-nums;position:relative}
 .tc{display:flex;gap:12px;justify-content:center}
 .tb{padding:12px 32px;background:var(--a);border:none;border-radius:12px;color:#000;font-size:16px;font-weight:600;cursor:pointer}
 .tb.sec{background:var(--s);color:#fff}
+.edit-btn{position:absolute;top:-30px;right:50%;transform:translateX(50%);background:var(--s);border:none;border-radius:8px;padding:6px 10px;cursor:pointer;color:var(--t);font-size:16px;opacity:0.7;transition:opacity 0.2s}
+.edit-btn:hover{opacity:1;background:var(--s2)}
+.time-input{display:flex;gap:8px;justify-content:center;align-items:center;margin-bottom:20px}
+.time-input input{width:60px;padding:8px;background:var(--s);border:1px solid var(--b);border-radius:8px;color:var(--t);font-size:18px;text-align:center;outline:none}
+.time-input input:focus{border-color:var(--a)}
+.time-input span{font-size:24px;color:var(--t2)}
 .ss{margin-bottom:24px}
 .st{font-size:13px;color:var(--t2);text-transform:uppercase;margin-bottom:12px;font-weight:600}
 .cp{display:flex;gap:12px;flex-wrap:wrap}
@@ -71,37 +77,33 @@ body{background:transparent;font-family:-apple-system,Segoe UI,Roboto,sans-serif
 .co.active{border-color:#000;box-shadow:0 0 0 2px #fff,0 0 0 4px #000}
 .co.active::after{content:"✓";position:absolute;top:50%;left:50%;transform:translate(-50%,-50%);color:#000;font-weight:bold;font-size:20px}
 .co[data-color="#ffffff"].active::after{color:#fff;text-shadow:0 0 4px #000}
-/* Фича 3: Живой градиент */
 .gradient-bg{position:absolute;top:0;left:0;width:100%;height:100%;opacity:0.3;transition:opacity 0.5s;pointer-events:none;z-index:1}
 .island:hover .gradient-bg{opacity:0.6}
-/* Фича 11: Персонаж-компаньон */
 .mascot{position:absolute;bottom:10px;right:10px;width:32px;height:32px;z-index:20;pointer-events:none;transition:transform 0.3s}
 .mascot svg{width:100%;height:100%;filter:drop-shadow(0 2px 4px rgba(0,0,0,0.5))}
 .mascot.sleeping{animation:sleepBreathe 3s infinite ease-in-out}
 .mascot.awake{animation:bounce 0.5s infinite alternate}
 @keyframes sleepBreathe{0%,100%{transform:scale(1)}50%{transform:scale(1.05)}}
 @keyframes bounce{0%{transform:translateY(0)}100%{transform:translateY(-5px)}}
+.pupil{transition:transform 0.1s ease-out}
 </style>
 </head>
 <body>
 <div class="island">
-  <!-- Фича 3: Canvas для живого градиента -->
   <canvas class="gradient-bg" id="gradCanvas"></canvas>
-  
   <div class="cv"><div id="cTime">00:00</div><div id="cW"><span id="wI">☀️</span> <span id="wT">--°</span></div></div>
-  
-  <!-- Фича 11: SVG персонаж (Котик) -->
   <div class="mascot sleeping" id="mascot">
     <svg viewBox="0 0 100 100" fill="none" xmlns="http://www.w3.org/2000/svg">
       <circle cx="50" cy="50" r="40" fill="var(--a)"/>
       <path d="M25 35 L15 15 L40 25 Z" fill="var(--a)"/>
       <path d="M75 35 L85 15 L60 25 Z" fill="var(--a)"/>
-      <circle cx="35" cy="45" r="5" fill="#000"/>
-      <circle cx="65" cy="45" r="5" fill="#000"/>
+      <circle cx="35" cy="45" r="8" fill="#fff"/>
+      <circle cx="65" cy="45" r="8" fill="#fff"/>
+      <circle class="pupil" id="pupilL" cx="35" cy="45" r="4" fill="#000"/>
+      <circle class="pupil" id="pupilR" cx="65" cy="45" r="4" fill="#000"/>
       <path d="M45 55 Q50 60 55 55" stroke="#000" stroke-width="3" stroke-linecap="round"/>
     </svg>
   </div>
-
   <div class="ev">
     <div class="tabs">
       <button class="tab active" data-tab="home">🏠 Главная</button>
@@ -118,25 +120,32 @@ body{background:transparent;font-family:-apple-system,Segoe UI,Roboto,sans-serif
 <script>
 const { ipcRenderer } = require('electron');
 let curTab='home', notes=JSON.parse(localStorage.getItem('island_notes')||'[]'), clipHist=[];
-let tTime=0, tInt=null, tRun=false;
+let tTime=parseInt(localStorage.getItem('island_timer')||'0'), tInt=null, tRun=false;
 let wData=null, sCity=localStorage.getItem('island_city')||'Москва';
 let sCoords=JSON.parse(localStorage.getItem('island_coords')||'{"lat":55.7558,"lon":37.6173}');
 const colors=[{n:'Белый',v:'#ffffff'},{n:'Синий',v:'#0a84ff'},{n:'Зеленый',v:'#30d158'},{n:'Оранжевый',v:'#ff9f0a'},{n:'Красный',v:'#ff453a'},{n:'Фиолетовый',v:'#bf5af2'},{n:'Розовый',v:'#ff375f'},{n:'Бирюзовый',v:'#64d2ff'},{n:'Желтый',v:'#ffd60a'},{n:'Индиго',v:'#5e5ce6'},{n:'Мятный',v:'#32d74b'},{n:'Коралловый',v:'#ff6961'}];
 const quotes=[{t:'Каждый день — новый шанс стать лучше.',a:'Неизвестно'},{t:'Успех — это сумма маленьких усилий.',a:'Роберт Кольер'},{t:'Не бойся медлить, бойся остановиться.',a:'Китайская пословица'},{t:'Ты сильнее, чем думаешь.',a:'Неизвестно'},{t:'Дисциплина — мост между целями и достижениями.',a:'Джим Рон'}];
 
-// === ФИЧА 3: ЖИВОЙ ГРАДИЕНТ НА CANVAS ===
 const canvas = document.getElementById('gradCanvas');
 const ctx = canvas.getContext('2d');
 let mouseX = 0, mouseY = 0, hue = 0;
-function resizeCanvas() {
-  canvas.width = window.innerWidth || 850;
-  canvas.height = window.innerHeight || 500;
-}
+function resizeCanvas() { canvas.width = window.innerWidth || 850; canvas.height = window.innerHeight || 500; }
 resizeCanvas();
 document.addEventListener('mousemove', (e) => {
   const rect = document.querySelector('.island').getBoundingClientRect();
   mouseX = e.clientX - rect.left;
   mouseY = e.clientY - rect.top;
+  // Котик следит за курсором
+  const mascot = document.getElementById('mascot');
+  const mascotRect = mascot.getBoundingClientRect();
+  const mascotX = mascotRect.left + mascotRect.width/2;
+  const mascotY = mascotRect.top + mascotRect.height/2;
+  const angle = Math.atan2(e.clientY - mascotY, e.clientX - mascotX);
+  const distance = Math.min(3, Math.hypot(e.clientX - mascotX, e.clientY - mascotY) / 50);
+  const pupilX = Math.cos(angle) * distance;
+  const pupilY = Math.sin(angle) * distance;
+  document.getElementById('pupilL').setAttribute('transform', `translate(${pupilX}, ${pupilY})`);
+  document.getElementById('pupilR').setAttribute('transform', `translate(${pupilX}, ${pupilY})`);
 });
 function drawGradient() {
   hue = (hue + 0.5) % 360;
@@ -151,42 +160,74 @@ function drawGradient() {
 }
 drawGradient();
 
-// === ФИЧА 11: ПЕРСОНАЖ-КОМПАНЬОН ===
 const mascot = document.getElementById('mascot');
 const island = document.querySelector('.island');
-island.addEventListener('mouseenter', () => {
-  mascot.classList.remove('sleeping');
-  mascot.classList.add('awake');
-});
-island.addEventListener('mouseleave', () => {
-  mascot.classList.remove('awake');
-  mascot.classList.add('sleeping');
-});
+island.addEventListener('mouseenter', () => { mascot.classList.remove('sleeping'); mascot.classList.add('awake'); });
+island.addEventListener('mouseleave', () => { mascot.classList.remove('awake'); mascot.classList.add('sleeping'); });
 
 function getGreet(){const h=new Date().getHours();if(h>=5&&h<12)return{t:'Доброе утро',i:'☀️'};if(h>=12&&h<18)return{t:'Добрый день',i:'🌤️'};if(h>=18&&h<23)return{t:'Добрый вечер',i:'🌙'};return{t:'Доброй ночи',i:'✨'};}
 function getQuote(){const d=Math.floor((new Date()-new Date(new Date().getFullYear(),0,0))/86400000);return quotes[d%quotes.length];}
 function updClock(){document.getElementById('cTime').textContent=new Date().toLocaleTimeString('ru-RU',{hour:'2-digit',minute:'2-digit'});}
 updClock();setInterval(updClock,1000);
 document.querySelectorAll('.tab').forEach(tab=>{tab.addEventListener('click',(e)=>{e.stopPropagation();document.querySelectorAll('.tab').forEach(t=>t.classList.remove('active'));tab.classList.add('active');curTab=tab.dataset.tab;render();});});
-function render(){const c=document.getElementById('content');
-if(curTab==='home'){const g=getGreet(),q=getQuote(),dt=new Date().toLocaleDateString('ru-RU',{weekday:'long',day:'numeric',month:'long'}),rn=notes.slice(0,3);
-let fh='';if(wData&&wData.hourly){const ch=new Date().getHours(),hs=[ch,ch+3,ch+6,ch+9,ch+12].filter(h=>h<24);fh=hs.map(h=>{const tp=Math.round(wData.hourly.temperature_2m[h]),ic=wIc(0);return'<div class="wi"><div class="wih">'+h+':00</div><div class="wic">'+ic+'</div><div class="wit">'+tp+'°</div></div>';}).join('');}else{fh='<div style="text-align:center;color:var(--t2);padding:20px;grid-column:1/-1">Загрузка прогноза...</div>';}
-c.innerHTML='<div class="dash"><div class="dc full"><div class="greet">'+g.i+' '+g.t+'</div><div class="greet-sub">'+dt.charAt(0).toUpperCase()+dt.slice(1)+'</div></div><div class="dc"><div class="dt">⚡ Быстрые таймеры</div><div class="qt"><button class="qb" onclick="qTimer(5)"><span class="tm">5</span><span class="lb">минут</span></button><button class="qb" onclick="qTimer(15)"><span class="tm">15</span><span class="lb">минут</span></button><button class="qb" onclick="qTimer(25)"><span class="tm">25</span><span class="lb">минут</span></button></div></div><div class="dc"><div class="dt">📝 Последние заметки</div><div class="rn">'+(rn.length===0?'<div class="ri empty">Нет заметок</div>':rn.map(n=>'<div class="ri">'+n+'</div>').join(''))+'</div></div><div class="dc full"><div class="dt">🌤️ Прогноз на день</div><div class="wf">'+fh+'</div></div><div class="dc full"><div class="quote">"'+q.t+'"<div class="quote-a">— '+q.a+'</div></div></div></div>';}
-else if(curTab==='music'){c.innerHTML='<div class="upload" onclick="document.getElementById(\'fIn\').click()"><input type="file" id="fIn" accept="audio/*" onchange="playM(this)"><div style="font-size:40px;margin-bottom:12px">📁</div><div style="font-size:16px;font-weight:600">Нажмите, чтобы выбрать MP3</div><div style="font-size:13px;color:var(--t2);margin-top:8px">Локальное воспроизведение</div></div><div id="mP"></div>';}
-else if(curTab==='weather'){if(!wData){c.innerHTML='<div style="text-align:center;padding:60px;color:var(--t2)">Загрузка погоды...</div>';loadW();return;}const cu=wData.current_weather,ho=wData.hourly,da=wData.daily,nH=new Date().getHours();c.innerHTML='<div class="wm"><div><div class="wtemp">'+Math.round(cu.temperature)+'°</div><div class="wdesc">'+wD(cu.weathercode)+'</div><div style="margin-top:8px;font-size:14px">'+sCity+'</div></div></div><div class="wd"><div class="wdc"><div class="wdl">Ветер</div><div class="wdv">'+cu.windspeed+' м/с</div></div><div class="wdc"><div class="wdl">Влажность</div><div class="wdv">'+ho.relative_humidity_2m[nH]+'%</div></div><div class="wdc"><div class="wdl">Давление</div><div class="wdv">'+Math.round(ho.pressure_msl[nH])+' гПа</div></div><div class="wdc"><div class="wdl">UV индекс</div><div class="wdv">'+da.uv_index_max[0]+'</div></div><div class="wdc"><div class="wdl">Восход</div><div class="wdv">'+da.sunrise[0].split("T")[1]+'</div></div><div class="wdc"><div class="wdl">Закат</div><div class="wdv">'+da.sunset[0].split("T")[1]+'</div></div></div>';}
-else if(curTab==='clipboard'){if(clipHist.length===0){c.innerHTML='<div style="text-align:center;padding:60px;color:var(--t2)">Буфер обмена пуст</div>';}else{c.innerHTML='<div>'+clipHist.map(it=>'<div class="ci" onclick="copyB(this)" data-txt="'+it.text.replace(/"/g,'&quot;')+'"><div class="ct">'+it.text+'</div><div class="ctm">'+it.time+'</div></div>').join('')+'</div>';}}
-else if(curTab==='notes'){c.innerHTML='<textarea class="ni" id="nI" placeholder="Новая заметка..." rows="3"></textarea><button class="tb" onclick="addN()" style="width:100%;margin-bottom:12px">Добавить</button><div class="nl">'+(notes.length===0?'<div style="text-align:center;padding:40px;color:var(--t2)">Нет заметок</div>':notes.map((n,i)=>'<div class="nit"><div>'+n+'</div><button class="nd" onclick="delN('+i+')">✕</button></div>').join(''))+'</div>';}
-else if(curTab==='timer'){const m=Math.floor(tTime/60),s=tTime%60,ts=String(m).padStart(2,'0')+':'+String(s).padStart(2,'0');c.innerHTML='<div class="td">'+ts+'</div><div class="tc"><button class="tb" onclick="togT()">'+(tRun?'Пауза':'Старт')+'</button><button class="tb sec" onclick="resT()">Сброс</button></div><div style="display:flex;gap:8px;justify-content:center;margin-top:24px"><button class="tb sec" onclick="setT(5)">5 мин</button><button class="tb sec" onclick="setT(15)">15 мин</button><button class="tb sec" onclick="setT(25)">25 мин</button></div>';}
-else if(curTab==='settings'){const ca=getComputedStyle(document.documentElement).getPropertyValue('--a').trim();c.innerHTML='<div class="ss"><div class="st">🎨 Цвет акцента (12 цветов)</div><div class="cp">'+colors.map(col=>'<div class="co '+(col.v.toLowerCase()===ca.toLowerCase()?'active':'')+'" style="background:'+col.v+'" data-color="'+col.v+'" title="'+col.n+'" onclick="setA(\''+col.v+'\',this)"></div>').join('')+'</div><div style="margin-top:12px;font-size:12px;color:var(--t2)">Выбрано: <span id="cCN" style="color:var(--a);font-weight:600">'+cN(ca)+'</span></div></div><div class="ss"><div class="st">🌍 Город для погоды</div><input type="text" class="ni" id="cIn" value="'+sCity+'" placeholder="Введите город"><button class="tb" onclick="chCity()" style="width:100%;margin-top:8px">Сохранить</button></div>';}
+
+function render(){
+  const c=document.getElementById('content');
+  if(curTab==='home'){
+    const g=getGreet(),q=getQuote(),dt=new Date().toLocaleDateString('ru-RU',{weekday:'long',day:'numeric',month:'long'}),rn=notes.slice(0,3);
+    let fh='';
+    if(wData&&wData.hourly){
+      const ch=new Date().getHours(),hs=[ch,ch+3,ch+6,ch+9,ch+12].filter(h=>h<24);
+      fh=hs.map(h=>{const tp=Math.round(wData.hourly.temperature_2m[h]),ic=wIc(0);return'<div class="wi"><div class="wih">'+h+':00</div><div class="wic">'+ic+'</div><div class="wit">'+tp+'°</div></div>';}).join('');
+    }else{fh='<div style="text-align:center;color:var(--t2);padding:20px;grid-column:1/-1">Загрузка прогноза...</div>';}
+    c.innerHTML='<div class="dash"><div class="dc full"><div class="greet">'+g.i+' '+g.t+'</div><div class="greet-sub">'+dt.charAt(0).toUpperCase()+dt.slice(1)+'</div></div><div class="dc"><div class="dt">⚡ Быстрые таймеры</div><div class="qt"><button class="qb" onclick="qTimer(5)"><span class="tm">5</span><span class="lb">минут</span></button><button class="qb" onclick="qTimer(15)"><span class="tm">15</span><span class="lb">минут</span></button><button class="qb" onclick="qTimer(25)"><span class="tm">25</span><span class="lb">минут</span></button></div></div><div class="dc"><div class="dt">📝 Последние заметки</div><div class="rn">'+(rn.length===0?'<div class="ri empty">Нет заметок</div>':rn.map(n=>'<div class="ri">'+n+'</div>').join(''))+'</div></div><div class="dc full"><div class="dt">🌤️ Прогноз на день</div><div class="wf">'+fh+'</div></div><div class="dc full"><div class="quote">"'+q.t+'"<div class="quote-a">— '+q.a+'</div></div></div></div>';
+  }
+  else if(curTab==='music'){
+    c.innerHTML='<div class="upload" onclick="document.getElementById(\'fIn\').click()"><input type="file" id="fIn" accept="audio/*" onchange="playM(this)"><div style="font-size:40px;margin-bottom:12px">📁</div><div style="font-size:16px;font-weight:600">Нажмите, чтобы выбрать MP3</div><div style="font-size:13px;color:var(--t2);margin-top:8px">Локальное воспроизведение</div></div><div id="mP"></div>';
+  }
+  else if(curTab==='weather'){
+    if(!wData){c.innerHTML='<div style="text-align:center;padding:60px;color:var(--t2)">Загрузка погоды...</div>';loadW();return;}
+    const cu=wData.current_weather,ho=wData.hourly,da=wData.daily,nH=new Date().getHours();
+    c.innerHTML='<div class="wm"><div><div class="wtemp">'+Math.round(cu.temperature)+'°</div><div class="wdesc">'+wD(cu.weathercode)+'</div><div style="margin-top:8px;font-size:14px">'+sCity+'</div></div></div><div class="wd"><div class="wdc"><div class="wdl">Ветер</div><div class="wdv">'+cu.windspeed+' м/с</div></div><div class="wdc"><div class="wdl">Влажность</div><div class="wdv">'+ho.relative_humidity_2m[nH]+'%</div></div><div class="wdc"><div class="wdl">Давление</div><div class="wdv">'+Math.round(ho.pressure_msl[nH])+' гПа</div></div><div class="wdc"><div class="wdl">UV индекс</div><div class="wdv">'+da.uv_index_max[0]+'</div></div><div class="wdc"><div class="wdl">Восход</div><div class="wdv">'+da.sunrise[0].split("T")[1]+'</div></div><div class="wdc"><div class="wdl">Закат</div><div class="wdv">'+da.sunset[0].split("T")[1]+'</div></div></div>';
+  }
+  else if(curTab==='clipboard'){
+    if(clipHist.length===0){c.innerHTML='<div style="text-align:center;padding:60px;color:var(--t2)">Буфер обмена пуст</div>';}
+    else{c.innerHTML='<div>'+clipHist.map(it=>'<div class="ci" onclick="copyB(this)" data-txt="'+it.text.replace(/"/g,'&quot;')+'"><div class="ct">'+it.text+'</div><div class="ctm">'+it.time+'</div></div>').join('')+'</div>';}
+  }
+  else if(curTab==='notes'){
+    c.innerHTML='<textarea class="ni" id="nI" placeholder="Новая заметка..." rows="3"></textarea><button class="tb" onclick="addN()" style="width:100%;margin-bottom:12px">Добавить</button><div class="nl">'+(notes.length===0?'<div style="text-align:center;padding:40px;color:var(--t2)">Нет заметок</div>':notes.map((n,i)=>'<div class="nit"><div>'+n+'</div><button class="nd" onclick="delN('+i+')">✕</button></div>').join(''))+'</div>';
+  }
+  else if(curTab==='timer'){
+    const m=Math.floor(tTime/60),s=tTime%60,ts=String(m).padStart(2,'0')+':'+String(s).padStart(2,'0');
+    c.innerHTML='<div style="position:relative"><div class="td" id="timerDisplay">'+ts+'</div><button class="edit-btn" onclick="editTimer()" title="Редактировать время">✏️</button></div><div class="time-input" id="timeInput" style="display:none"><input type="number" id="editHours" min="0" max="99" value="'+m+'" placeholder="ЧЧ"><span>:</span><input type="number" id="editMinutes" min="0" max="59" value="'+s+'" placeholder="ММ"><button class="tb" onclick="saveTimer()">✓</button><button class="tb sec" onclick="cancelEdit()">✕</button></div><div class="tc"><button class="tb" onclick="togT()">'+(tRun?'Пауза':'Старт')+'</button><button class="tb sec" onclick="resT()">Сброс</button></div><div style="display:flex;gap:8px;justify-content:center;margin-top:24px"><button class="tb sec" onclick="setT(5)">5 мин</button><button class="tb sec" onclick="setT(15)">15 мин</button><button class="tb sec" onclick="setT(25)">25 мин</button></div>';
+  }
+  else if(curTab==='settings'){
+    const ca=getComputedStyle(document.documentElement).getPropertyValue('--a').trim();
+    c.innerHTML='<div class="ss"><div class="st">🎨 Цвет акцента (12 цветов)</div><div class="cp">'+colors.map(col=>'<div class="co '+(col.v.toLowerCase()===ca.toLowerCase()?'active':'')+'" style="background:'+col.v+'" data-color="'+col.v+'" title="'+col.n+'" onclick="setA(\''+col.v+'\',this)"></div>').join('')+'</div><div style="margin-top:12px;font-size:12px;color:var(--t2)">Выбрано: <span id="cCN" style="color:var(--a);font-weight:600">'+cN(ca)+'</span></div></div><div class="ss"><div class="st">🌍 Город для погоды</div><input type="text" class="ni" id="cIn" value="'+sCity+'" placeholder="Введите город"><button class="tb" onclick="chCity()" style="width:100%;margin-top:8px">Сохранить</button></div>';
+  }
 }
-window.qTimer=function(m){tTime=m*60;tRun=false;clearInterval(tInt);document.querySelectorAll('.tab').forEach(t=>t.classList.remove('active'));document.querySelector('.tab[data-tab="timer"]').classList.add('active');curTab='timer';render();};
+
+window.editTimer=function(){
+  document.getElementById('timerDisplay').style.display='none';
+  document.querySelector('.edit-btn').style.display='none';
+  document.getElementById('timeInput').style.display='flex';
+};
+window.cancelEdit=function(){render();};
+window.saveTimer=function(){
+  const h=parseInt(document.getElementById('editHours').value)||0;
+  const m=parseInt(document.getElementById('editMinutes').value)||0;
+  tTime=h*60+m*1;
+  localStorage.setItem('island_timer',tTime);
+  render();
+};
+window.qTimer=function(m){tTime=m*60;tRun=false;clearInterval(tInt);localStorage.setItem('island_timer',tTime);document.querySelectorAll('.tab').forEach(t=>t.classList.remove('active'));document.querySelector('.tab[data-tab="timer"]').classList.add('active');curTab='timer';render();};
 window.playM=function(inp){const f=inp.files[0];if(!f)return;const u=URL.createObjectURL(f);document.getElementById('mP').innerHTML='<audio controls autoplay style="width:100%;margin-top:16px;border-radius:12px" src="'+u+'"></audio><div style="text-align:center;margin-top:12px;font-weight:600">'+f.name+'</div>';};
 window.copyB=function(el){ipcRenderer.invoke('copy-clip',el.dataset.txt);};
 window.addN=function(){const i=document.getElementById('nI');if(i&&i.value.trim()){notes.unshift(i.value.trim());localStorage.setItem('island_notes',JSON.stringify(notes));render();}};
 window.delN=function(idx){notes.splice(idx,1);localStorage.setItem('island_notes',JSON.stringify(notes));render();};
-window.togT=function(){if(tRun){clearInterval(tInt);tRun=false;}else{tRun=true;tInt=setInterval(()=>{if(tTime>0){tTime--;render();}else{clearInterval(tInt);tRun=false;alert('Таймер завершён!');}},1000);}render();};
-window.resT=function(){clearInterval(tInt);tRun=false;tTime=0;render();};
-window.setT=function(m){tTime=m*60;render();};
+window.togT=function(){if(tRun){clearInterval(tInt);tRun=false;}else{tRun=true;tInt=setInterval(()=>{if(tTime>0){tTime--;localStorage.setItem('island_timer',tTime);render();}else{clearInterval(tInt);tRun=false;alert('Таймер завершён!');}},1000);}render();};
+window.resT=function(){clearInterval(tInt);tRun=false;tTime=0;localStorage.setItem('island_timer',tTime);render();};
+window.setT=function(m){tTime=m*60;localStorage.setItem('island_timer',tTime);render();};
 window.setA=function(col,el){document.documentElement.style.setProperty('--a',col);localStorage.setItem('island_a',col);document.querySelectorAll('.co').forEach(e=>e.classList.remove('active'));el.classList.add('active');const n=document.getElementById('cCN');if(n)n.textContent=cN(col);};
 window.chCity=async function(){const inp=document.getElementById('cIn');if(inp&&inp.value.trim()){try{const r=await ipcRenderer.invoke('geocode-city',inp.value.trim());sCity=r.name;sCoords={lat:r.lat,lon:r.lon};localStorage.setItem('island_city',sCity);localStorage.setItem('island_coords',JSON.stringify(sCoords));wData=null;render();}catch(e){alert('Город не найден');}}};
 function cN(h){const c=colors.find(p=>p.v.toLowerCase()===h.toLowerCase());return c?c.n:h;}

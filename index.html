@@ -79,6 +79,8 @@ body{background:transparent;font-family:-apple-system,Segoe UI,Roboto,sans-serif
 .co[data-color="#ffffff"].active::after{color:#fff;text-shadow:0 0 4px #000}
 .gradient-bg{position:absolute;top:0;left:0;width:100%;height:100%;opacity:0.3;transition:opacity 0.5s;pointer-events:none;z-index:1}
 .island:hover .gradient-bg{opacity:0.6}
+
+/* Стили для компаньона */
 .mascot{position:absolute;bottom:10px;right:10px;width:32px;height:32px;z-index:20;pointer-events:none;transition:transform 0.3s}
 .mascot svg{width:100%;height:100%;filter:drop-shadow(0 2px 4px rgba(0,0,0,0.5))}
 .mascot.sleeping{animation:sleepBreathe 3s infinite ease-in-out}
@@ -86,24 +88,37 @@ body{background:transparent;font-family:-apple-system,Segoe UI,Roboto,sans-serif
 @keyframes sleepBreathe{0%,100%{transform:scale(1)}50%{transform:scale(1.05)}}
 @keyframes bounce{0%{transform:translateY(0)}100%{transform:translateY(-5px)}}
 .pupil{transition:transform 0.1s ease-out}
+
+/* Стили для выбора скина */
+.skin-grid{display:grid;grid-template-columns:repeat(4,1fr);gap:12px;margin-top:8px}
+.skin-option{width:48px;height:48px;background:var(--s);border-radius:12px;cursor:pointer;border:2px solid transparent;transition:all 0.2s;display:flex;align-items:center;justify-content:center;font-size:24px}
+.skin-option:hover{background:var(--s2);transform:scale(1.1)}
+.skin-option.active{border-color:var(--a);box-shadow:0 0 0 2px var(--a)}
+
+/* Уведомление таймера */
+.timer-alert{position:absolute;top:0;left:0;width:100%;height:100%;display:flex;align-items:center;justify-content:center;background:var(--bg);color:var(--a);font-size:16px;font-weight:700;z-index:15;opacity:0;pointer-events:none;transition:opacity 0.3s;border-radius:18px}
+.timer-alert.show{opacity:1;pointer-events:auto}
+
+/* Анимация времени */
+.compact-time{transition:transform 0.4s cubic-bezier(0.4,0,0.2,1);transform-origin:center right}
+.island:hover .compact-time{transform:translateX(40px)}
 </style>
 </head>
 <body>
 <div class="island">
   <canvas class="gradient-bg" id="gradCanvas"></canvas>
-  <div class="cv"><div id="cTime">00:00</div><div id="cW"><span id="wI">☀️</span> <span id="wT">--°</span></div></div>
-  <div class="mascot sleeping" id="mascot">
-    <svg viewBox="0 0 100 100" fill="none" xmlns="http://www.w3.org/2000/svg">
-      <circle cx="50" cy="50" r="40" fill="var(--a)"/>
-      <path d="M25 35 L15 15 L40 25 Z" fill="var(--a)"/>
-      <path d="M75 35 L85 15 L60 25 Z" fill="var(--a)"/>
-      <circle cx="35" cy="45" r="8" fill="#fff"/>
-      <circle cx="65" cy="45" r="8" fill="#fff"/>
-      <circle class="pupil" id="pupilL" cx="35" cy="45" r="4" fill="#000"/>
-      <circle class="pupil" id="pupilR" cx="65" cy="45" r="4" fill="#000"/>
-      <path d="M45 55 Q50 60 55 55" stroke="#000" stroke-width="3" stroke-linecap="round"/>
-    </svg>
+  
+  <!-- Уведомление таймера -->
+  <div class="timer-alert" id="timerAlert">⏱️ Время вышло!</div>
+  
+  <div class="cv">
+    <div class="compact-time"><div id="cTime">00:00</div></div>
+    <div id="cW"><span id="wI">☀️</span> <span id="wT">--°</span></div>
   </div>
+  
+  <!-- Компаньон (скин загружается динамически) -->
+  <div class="mascot sleeping" id="mascot"></div>
+  
   <div class="ev">
     <div class="tabs">
       <button class="tab active" data-tab="home">🏠 Главная</button>
@@ -123,46 +138,56 @@ let curTab='home', notes=JSON.parse(localStorage.getItem('island_notes')||'[]'),
 let tTime=parseInt(localStorage.getItem('island_timer')||'0'), tInt=null, tRun=false;
 let wData=null, sCity=localStorage.getItem('island_city')||'Москва';
 let sCoords=JSON.parse(localStorage.getItem('island_coords')||'{"lat":55.7558,"lon":37.6173}');
+let currentSkin=localStorage.getItem('island_skin')||'cat';
 const colors=[{n:'Белый',v:'#ffffff'},{n:'Синий',v:'#0a84ff'},{n:'Зеленый',v:'#30d158'},{n:'Оранжевый',v:'#ff9f0a'},{n:'Красный',v:'#ff453a'},{n:'Фиолетовый',v:'#bf5af2'},{n:'Розовый',v:'#ff375f'},{n:'Бирюзовый',v:'#64d2ff'},{n:'Желтый',v:'#ffd60a'},{n:'Индиго',v:'#5e5ce6'},{n:'Мятный',v:'#32d74b'},{n:'Коралловый',v:'#ff6961'}];
 const quotes=[{t:'Каждый день — новый шанс стать лучше.',a:'Неизвестно'},{t:'Успех — это сумма маленьких усилий.',a:'Роберт Кольер'},{t:'Не бойся медлить, бойся остановиться.',a:'Китайская пословица'},{t:'Ты сильнее, чем думаешь.',a:'Неизвестно'},{t:'Дисциплина — мост между целями и достижениями.',a:'Джим Рон'}];
 
-const canvas = document.getElementById('gradCanvas');
-const ctx = canvas.getContext('2d');
-let mouseX = 0, mouseY = 0, hue = 0;
-function resizeCanvas() { canvas.width = window.innerWidth || 850; canvas.height = window.innerHeight || 500; }
+// SVG скины компаньонов
+const skins={
+  cat:`<svg viewBox="0 0 100 100" fill="none"><circle cx="50" cy="50" r="40" fill="var(--a)"/><path d="M25 35 L15 15 L40 25 Z" fill="var(--a)"/><path d="M75 35 L85 15 L60 25 Z" fill="var(--a)"/><circle cx="35" cy="45" r="8" fill="#fff"/><circle cx="65" cy="45" r="8" fill="#fff"/><circle class="pupil" id="pL" cx="35" cy="45" r="4" fill="#000"/><circle class="pupil" id="pR" cx="65" cy="45" r="4" fill="#000"/><path d="M45 55 Q50 60 55 55" stroke="#000" stroke-width="3" stroke-linecap="round"/></svg>`,
+  robot:`<svg viewBox="0 0 100 100" fill="none"><rect x="20" y="25" width="60" height="50" rx="10" fill="var(--a)"/><rect x="30" y="15" width="40" height="10" rx="3" fill="var(--a)"/><circle cx="38" cy="45" r="6" fill="#fff"/><circle cx="62" cy="45" r="6" fill="#fff"/><circle class="pupil" id="pL" cx="38" cy="45" r="3" fill="#000"/><circle class="pupil" id="pR" cx="62" cy="45" r="3" fill="#000"/><line x1="35" y1="60" x2="65" y2="60" stroke="#000" stroke-width="3" stroke-linecap="round"/></svg>`,
+  fox:`<svg viewBox="0 0 100 100" fill="none"><polygon points="50,15 20,40 35,85 65,85 80,40" fill="var(--a)"/><polygon points="50,15 30,35 50,45 70,35" fill="#fff"/><circle cx="40" cy="50" r="5" fill="#fff"/><circle cx="60" cy="50" r="5" fill="#fff"/><circle class="pupil" id="pL" cx="40" cy="50" r="2.5" fill="#000"/><circle class="pupil" id="pR" cx="60" cy="50" r="2.5" fill="#000"/><circle cx="50" cy="60" r="3" fill="#000"/></svg>`,
+  ghost:`<svg viewBox="0 0 100 100" fill="none"><path d="M50 15 C30 15 20 35 20 55 L20 80 L30 70 L40 80 L50 70 L60 80 L70 70 L80 80 L80 55 C80 35 70 15 50 15Z" fill="var(--a)" opacity="0.9"/><circle cx="40" cy="45" r="6" fill="#fff"/><circle cx="60" cy="45" r="6" fill="#fff"/><circle class="pupil" id="pL" cx="40" cy="45" r="3" fill="#000"/><circle class="pupil" id="pR" cx="60" cy="45" r="3" fill="#000"/><ellipse cx="50" cy="60" rx="5" ry="3" fill="#000"/></svg>`,
+  capybara:`<svg viewBox="0 0 100 100" fill="none"><ellipse cx="50" cy="55" rx="35" ry="30" fill="var(--a)"/><circle cx="35" cy="45" r="4" fill="#fff"/><circle cx="65" cy="45" r="4" fill="#fff"/><circle class="pupil" id="pL" cx="35" cy="45" r="2" fill="#000"/><circle class="pupil" id="pR" cx="65" cy="45" r="2" fill="#000"/><ellipse cx="50" cy="58" rx="8" ry="4" fill="#000"/><line x1="42" y1="58" x2="58" y2="58" stroke="#fff" stroke-width="1"/></svg>`,
+  panda:`<svg viewBox="0 0 100 100" fill="none"><circle cx="50" cy="50" r="38" fill="var(--a)"/><circle cx="35" cy="42" r="12" fill="#000"/><circle cx="65" cy="42" r="12" fill="#000"/><circle cx="35" cy="42" r="5" fill="#fff"/><circle cx="65" cy="42" r="5" fill="#fff"/><circle class="pupil" id="pL" cx="35" cy="42" r="2.5" fill="#000"/><circle class="pupil" id="pR" cx="65" cy="42" r="2.5" fill="#000"/><ellipse cx="50" cy="58" rx="6" ry="4" fill="#000"/></svg>`,
+  alien:`<svg viewBox="0 0 100 100" fill="none"><ellipse cx="50" cy="50" rx="35" ry="40" fill="var(--a)"/><ellipse cx="38" cy="42" rx="10" ry="14" fill="#fff" transform="rotate(-15 38 42)"/><ellipse cx="62" cy="42" rx="10" ry="14" fill="#fff" transform="rotate(15 62 42)"/><circle class="pupil" id="pL" cx="38" cy="42" r="5" fill="#000"/><circle class="pupil" id="pR" cx="62" cy="42" r="5" fill="#000"/><path d="M45 65 Q50 60 55 65" stroke="#000" stroke-width="2" stroke-linecap="round"/></svg>`,
+  heart:`<svg viewBox="0 0 100 100" fill="none"><path d="M50 85 C30 65 10 50 10 35 C10 20 25 10 40 10 C48 10 50 20 50 20 C50 20 52 10 60 10 C75 10 90 20 90 35 C90 50 70 65 50 85Z" fill="var(--a)"/><circle cx="40" cy="35" r="4" fill="#fff"/><circle cx="60" cy="35" r="4" fill="#fff"/><circle class="pupil" id="pL" cx="40" cy="35" r="2" fill="#000"/><circle class="pupil" id="pR" cx="60" cy="35" r="2" fill="#000"/></svg>`
+};
+
+const canvas=document.getElementById('gradCanvas');
+const ctx=canvas.getContext('2d');
+let mouseX=0,mouseY=0,hue=0;
+function resizeCanvas(){canvas.width=window.innerWidth||850;canvas.height=window.innerHeight||500;}
 resizeCanvas();
-document.addEventListener('mousemove', (e) => {
-  const rect = document.querySelector('.island').getBoundingClientRect();
-  mouseX = e.clientX - rect.left;
-  mouseY = e.clientY - rect.top;
-  const mascot = document.getElementById('mascot');
-  const mascotRect = mascot.getBoundingClientRect();
-  const mascotX = mascotRect.left + mascotRect.width/2;
-  const mascotY = mascotRect.top + mascotRect.height/2;
-  const angle = Math.atan2(e.clientY - mascotY, e.clientX - mascotX);
-  const distance = Math.min(3, Math.hypot(e.clientX - mascotX, e.clientY - mascotY) / 50);
-  const pupilX = Math.cos(angle) * distance;
-  const pupilY = Math.sin(angle) * distance;
-  document.getElementById('pupilL').setAttribute('transform', 'translate('+pupilX+', '+pupilY+')');
-  document.getElementById('pupilR').setAttribute('transform', 'translate('+pupilX+', '+pupilY+')');
+document.addEventListener('mousemove',(e)=>{
+  const rect=document.querySelector('.island').getBoundingClientRect();
+  mouseX=e.clientX-rect.left;mouseY=e.clientY-rect.top;
+  const m=document.getElementById('mascot');if(!m)return;
+  const mr=m.getBoundingClientRect();
+  const mx=mr.left+mr.width/2,my=mr.top+mr.height/2;
+  const angle=Math.atan2(e.clientY-my,e.clientX-mx);
+  const dist=Math.min(3,Math.hypot(e.clientX-mx,e.clientY-my)/50);
+  const px=Math.cos(angle)*dist,py=Math.sin(angle)*dist;
+  document.querySelectorAll('.pupil').forEach(p=>p.setAttribute('transform','translate('+px+','+py+')'));
 });
-function drawGradient() {
-  hue = (hue + 0.5) % 360;
-  const gradient = ctx.createRadialGradient(mouseX, mouseY, 0, mouseX, mouseY, 400);
-  gradient.addColorStop(0, 'hsla('+hue+', 70%, 60%, 0.4)');
-  gradient.addColorStop(0.5, 'hsla('+((hue+60)%360)+', 70%, 50%, 0.2)');
-  gradient.addColorStop(1, 'transparent');
-  ctx.clearRect(0, 0, canvas.width, canvas.height);
-  ctx.fillStyle = gradient;
-  ctx.fillRect(0, 0, canvas.width, canvas.height);
+function drawGradient(){
+  hue=(hue+0.5)%360;
+  const g=ctx.createRadialGradient(mouseX,mouseY,0,mouseX,mouseY,400);
+  g.addColorStop(0,'hsla('+hue+',70%,60%,0.4)');
+  g.addColorStop(0.5,'hsla('+((hue+60)%360)+',70%,50%,0.2)');
+  g.addColorStop(1,'transparent');
+  ctx.clearRect(0,0,canvas.width,canvas.height);
+  ctx.fillStyle=g;ctx.fillRect(0,0,canvas.width,canvas.height);
   requestAnimationFrame(drawGradient);
 }
 drawGradient();
 
-const mascot = document.getElementById('mascot');
-const island = document.querySelector('.island');
-island.addEventListener('mouseenter', () => { mascot.classList.remove('sleeping'); mascot.classList.add('awake'); });
-island.addEventListener('mouseleave', () => { mascot.classList.remove('awake'); mascot.classList.add('sleeping'); });
+const mascotEl=document.getElementById('mascot');
+const island=document.querySelector('.island');
+function setSkin(name){currentSkin=name;localStorage.setItem('island_skin',name);mascotEl.innerHTML=skins[name]||skins.cat;renderSettingsIfOpen();}
+setSkin(currentSkin);
+island.addEventListener('mouseenter',()=>{mascotEl.classList.remove('sleeping');mascotEl.classList.add('awake');});
+island.addEventListener('mouseleave',()=>{mascotEl.classList.remove('awake');mascotEl.classList.add('sleeping');});
 
 function getGreet(){const h=new Date().getHours();if(h>=5&&h<12)return{t:'Доброе утро',i:'☀️'};if(h>=12&&h<18)return{t:'Добрый день',i:'🌤️'};if(h>=18&&h<23)return{t:'Добрый вечер',i:'🌙'};return{t:'Доброй ночи',i:'✨'};}
 function getQuote(){const d=Math.floor((new Date()-new Date(new Date().getFullYear(),0,0))/86400000);return quotes[d%quotes.length];}
@@ -175,15 +200,11 @@ function render(){
   if(curTab==='home'){
     const g=getGreet(),q=getQuote(),dt=new Date().toLocaleDateString('ru-RU',{weekday:'long',day:'numeric',month:'long'}),rn=notes.slice(0,3);
     let fh='';
-    if(wData&&wData.hourly){
-      const ch=new Date().getHours(),hs=[ch,ch+3,ch+6,ch+9,ch+12].filter(h=>h<24);
-      fh=hs.map(h=>{const tp=Math.round(wData.hourly.temperature_2m[h]),ic=wIc(0);return'<div class="wi"><div class="wih">'+h+':00</div><div class="wic">'+ic+'</div><div class="wit">'+tp+'°</div></div>';}).join('');
-    }else{fh='<div style="text-align:center;color:var(--t2);padding:20px;grid-column:1/-1">Загрузка прогноза...</div>';}
+    if(wData&&wData.hourly){const ch=new Date().getHours(),hs=[ch,ch+3,ch+6,ch+9,ch+12].filter(h=>h<24);fh=hs.map(h=>{const tp=Math.round(wData.hourly.temperature_2m[h]),ic=wIc(0);return'<div class="wi"><div class="wih">'+h+':00</div><div class="wic">'+ic+'</div><div class="wit">'+tp+'°</div></div>';}).join('');}
+    else{fh='<div style="text-align:center;color:var(--t2);padding:20px;grid-column:1/-1">Загрузка прогноза...</div>';}
     c.innerHTML='<div class="dash"><div class="dc full"><div class="greet">'+g.i+' '+g.t+'</div><div class="greet-sub">'+dt.charAt(0).toUpperCase()+dt.slice(1)+'</div></div><div class="dc"><div class="dt">⚡ Быстрые таймеры</div><div class="qt"><button class="qb" onclick="qTimer(5)"><span class="tm">5</span><span class="lb">минут</span></button><button class="qb" onclick="qTimer(15)"><span class="tm">15</span><span class="lb">минут</span></button><button class="qb" onclick="qTimer(25)"><span class="tm">25</span><span class="lb">минут</span></button></div></div><div class="dc"><div class="dt">📝 Последние заметки</div><div class="rn">'+(rn.length===0?'<div class="ri empty">Нет заметок</div>':rn.map(n=>'<div class="ri">'+n+'</div>').join(''))+'</div></div><div class="dc full"><div class="dt">🌤️ Прогноз на день</div><div class="wf">'+fh+'</div></div><div class="dc full"><div class="quote">"'+q.t+'"<div class="quote-a">— '+q.a+'</div></div></div></div>';
   }
-  else if(curTab==='music'){
-    c.innerHTML='<div class="upload" onclick="document.getElementById(\'fIn\').click()"><input type="file" id="fIn" accept="audio/*" onchange="playM(this)"><div style="font-size:40px;margin-bottom:12px">📁</div><div style="font-size:16px;font-weight:600">Нажмите, чтобы выбрать MP3</div><div style="font-size:13px;color:var(--t2);margin-top:8px">Локальное воспроизведение</div></div><div id="mP"></div>';
-  }
+  else if(curTab==='music'){c.innerHTML='<div class="upload" onclick="document.getElementById(\'fIn\').click()"><input type="file" id="fIn" accept="audio/*" onchange="playM(this)"><div style="font-size:40px;margin-bottom:12px">📁</div><div style="font-size:16px;font-weight:600">Нажмите, чтобы выбрать MP3</div><div style="font-size:13px;color:var(--t2);margin-top:8px">Локальное воспроизведение</div></div><div id="mP"></div>';}
   else if(curTab==='weather'){
     if(!wData){c.innerHTML='<div style="text-align:center;padding:60px;color:var(--t2)">Загрузка погоды...</div>';loadW();return;}
     const cu=wData.current_weather,ho=wData.hourly,da=wData.daily,nH=new Date().getHours();
@@ -193,38 +214,27 @@ function render(){
     if(clipHist.length===0){c.innerHTML='<div style="text-align:center;padding:60px;color:var(--t2)">Буфер обмена пуст</div>';}
     else{c.innerHTML='<div>'+clipHist.map(it=>'<div class="ci" onclick="copyB(this)" data-txt="'+it.text.replace(/"/g,'&quot;')+'"><div class="ct">'+it.text+'</div><div class="ctm">'+it.time+'</div></div>').join('')+'</div>';}
   }
-  else if(curTab==='notes'){
-    c.innerHTML='<textarea class="ni" id="nI" placeholder="Новая заметка..." rows="3"></textarea><button class="tb" onclick="addN()" style="width:100%;margin-bottom:12px">Добавить</button><div class="nl">'+(notes.length===0?'<div style="text-align:center;padding:40px;color:var(--t2)">Нет заметок</div>':notes.map((n,i)=>'<div class="nit"><div>'+n+'</div><button class="nd" onclick="delN('+i+')">✕</button></div>').join(''))+'</div>';
-  }
+  else if(curTab==='notes'){c.innerHTML='<textarea class="ni" id="nI" placeholder="Новая заметка..." rows="3"></textarea><button class="tb" onclick="addN()" style="width:100%;margin-bottom:12px">Добавить</button><div class="nl">'+(notes.length===0?'<div style="text-align:center;padding:40px;color:var(--t2)">Нет заметок</div>':notes.map((n,i)=>'<div class="nit"><div>'+n+'</div><button class="nd" onclick="delN('+i+')">✕</button></div>').join(''))+'</div>';}
   else if(curTab==='timer'){
     const m=Math.floor(tTime/60),s=tTime%60,ts=String(m).padStart(2,'0')+':'+String(s).padStart(2,'0');
     c.innerHTML='<div style="position:relative"><div class="td" id="timerDisplay">'+ts+'</div><button class="edit-btn" onclick="editTimer()" title="Редактировать время">✏️</button></div><div class="time-input" id="timeInput" style="display:none"><input type="number" id="editHours" min="0" max="99" value="'+m+'" placeholder="ЧЧ"><span>:</span><input type="number" id="editMinutes" min="0" max="59" value="'+s+'" placeholder="ММ"><button class="tb" onclick="saveTimer()">✓</button><button class="tb sec" onclick="cancelEdit()">✕</button></div><div class="tc"><button class="tb" onclick="togT()">'+(tRun?'Пауза':'Старт')+'</button><button class="tb sec" onclick="resT()">Сброс</button></div><div style="display:flex;gap:8px;justify-content:center;margin-top:24px"><button class="tb sec" onclick="setT(5)">5 мин</button><button class="tb sec" onclick="setT(15)">15 мин</button><button class="tb sec" onclick="setT(25)">25 мин</button></div>';
   }
   else if(curTab==='settings'){
     const ca=getComputedStyle(document.documentElement).getPropertyValue('--a').trim();
-    c.innerHTML='<div class="ss"><div class="st">🎨 Цвет акцента (12 цветов)</div><div class="cp">'+colors.map(col=>'<div class="co '+(col.v.toLowerCase()===ca.toLowerCase()?'active':'')+'" style="background:'+col.v+'" data-color="'+col.v+'" title="'+col.n+'" onclick="setA(\''+col.v+'\',this)"></div>').join('')+'</div><div style="margin-top:12px;font-size:12px;color:var(--t2)">Выбрано: <span id="cCN" style="color:var(--a);font-weight:600">'+cN(ca)+'</span></div></div><div class="ss"><div class="st">🌍 Город для погоды</div><input type="text" class="ni" id="cIn" value="'+sCity+'" placeholder="Введите город"><button class="tb" onclick="chCity()" style="width:100%;margin-top:8px">Сохранить</button></div>';
+    const skinNames={cat:'🐱 Котик',robot:'🤖 Робот',fox:'🦊 Лиса',ghost:'👻 Призрак',capybara:'🥔 Капибара',panda:'🐼 Панда',alien:'👽 Инопланетянин',heart:'❤️ Сердечко'};
+    c.innerHTML='<div class="ss"><div class="st">🎨 Цвет акцента (12 цветов)</div><div class="cp">'+colors.map(col=>'<div class="co '+(col.v.toLowerCase()===ca.toLowerCase()?'active':'')+'" style="background:'+col.v+'" data-color="'+col.v+'" title="'+col.n+'" onclick="setA(\''+col.v+'\',this)"></div>').join('')+'</div><div style="margin-top:12px;font-size:12px;color:var(--t2)">Выбрано: <span id="cCN" style="color:var(--a);font-weight:600">'+cN(ca)+'</span></div></div><div class="ss"><div class="st">🎭 Скин компаньона</div><div class="skin-grid">'+Object.keys(skins).map(k=>'<div class="skin-option '+(k===currentSkin?'active':'')+'" onclick="setSkin(\''+k+'\')" title="'+skinNames[k]+'">'+skinNames[k].split(' ')[0]+'</div>').join('')+'</div><div style="margin-top:8px;font-size:12px;color:var(--t2)">Текущий: '+skinNames[currentSkin]+'</div></div><div class="ss"><div class="st">🌍 Город для погоды</div><input type="text" class="ni" id="cIn" value="'+sCity+'" placeholder="Введите город"><button class="tb" onclick="chCity()" style="width:100%;margin-top:8px">Сохранить</button></div>';
   }
 }
 
-window.editTimer=function(){
-  document.getElementById('timerDisplay').style.display='none';
-  document.querySelector('.edit-btn').style.display='none';
-  document.getElementById('timeInput').style.display='flex';
-};
+window.editTimer=function(){document.getElementById('timerDisplay').style.display='none';document.querySelector('.edit-btn').style.display='none';document.getElementById('timeInput').style.display='flex';};
 window.cancelEdit=function(){render();};
-window.saveTimer=function(){
-  const h=parseInt(document.getElementById('editHours').value)||0;
-  const m=parseInt(document.getElementById('editMinutes').value)||0;
-  tTime=h*60+m;
-  localStorage.setItem('island_timer',tTime);
-  render();
-};
+window.saveTimer=function(){const h=parseInt(document.getElementById('editHours').value)||0;const m=parseInt(document.getElementById('editMinutes').value)||0;tTime=h*60+m;localStorage.setItem('island_timer',tTime);render();};
 window.qTimer=function(m){tTime=m*60;tRun=false;clearInterval(tInt);localStorage.setItem('island_timer',tTime);document.querySelectorAll('.tab').forEach(t=>t.classList.remove('active'));document.querySelector('.tab[data-tab="timer"]').classList.add('active');curTab='timer';render();};
 window.playM=function(inp){const f=inp.files[0];if(!f)return;const u=URL.createObjectURL(f);document.getElementById('mP').innerHTML='<audio controls autoplay style="width:100%;margin-top:16px;border-radius:12px" src="'+u+'"></audio><div style="text-align:center;margin-top:12px;font-weight:600">'+f.name+'</div>';};
 window.copyB=function(el){ipcRenderer.invoke('copy-clip',el.dataset.txt);};
 window.addN=function(){const i=document.getElementById('nI');if(i&&i.value.trim()){notes.unshift(i.value.trim());localStorage.setItem('island_notes',JSON.stringify(notes));render();}};
 window.delN=function(idx){notes.splice(idx,1);localStorage.setItem('island_notes',JSON.stringify(notes));render();};
-window.togT=function(){if(tRun){clearInterval(tInt);tRun=false;}else{tRun=true;tInt=setInterval(()=>{if(tTime>0){tTime--;localStorage.setItem('island_timer',tTime);render();}else{clearInterval(tInt);tRun=false;alert('Таймер завершён!');}},1000);}render();};
+window.togT=function(){if(tRun){clearInterval(tInt);tRun=false;}else{tRun=true;tInt=setInterval(()=>{if(tTime>0){tTime--;localStorage.setItem('island_timer',tTime);render();}else{clearInterval(tInt);tRun=false;showTimerAlert();}},1000);}render();};
 window.resT=function(){clearInterval(tInt);tRun=false;tTime=0;localStorage.setItem('island_timer',tTime);render();};
 window.setT=function(m){tTime=m*60;localStorage.setItem('island_timer',tTime);render();};
 window.setA=function(col,el){document.documentElement.style.setProperty('--a',col);localStorage.setItem('island_a',col);document.querySelectorAll('.co').forEach(e=>e.classList.remove('active'));el.classList.add('active');const n=document.getElementById('cCN');if(n)n.textContent=cN(col);};
@@ -239,6 +249,14 @@ loadW();setInterval(loadW,10*60*1000);
 const sa=localStorage.getItem('island_a');if(sa)document.documentElement.style.setProperty('--a',sa);
 window.switchTab=function(n){const t=document.querySelector('.tab[data-tab="'+n+'"]');if(t)t.click();};
 render();
+
+// Функция показа уведомления таймера
+function showTimerAlert(){
+  const alert=document.getElementById('timerAlert');
+  alert.classList.add('show');
+  setTimeout(()=>{alert.classList.remove('show');},3000);
+}
+function renderSettingsIfOpen(){if(curTab==='settings')render();}
 </script>
 </body>
 </html>

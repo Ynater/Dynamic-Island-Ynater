@@ -1,0 +1,14 @@
+﻿node_modules/
+dist/
+electron-data/
+.vs/
+*.log
+.DS_Store
+build.js
+colors.js
+fix.js
+island.js
+restore_settings.js
+setup.js
+update.js
+update_home.js

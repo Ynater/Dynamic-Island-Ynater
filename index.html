@@ -1,9 +1,10 @@
-﻿<!DOCTYPE html>
+<!DOCTYPE html>
 <html lang="ru">
 <head>
 <meta charset="UTF-8">
 <title>Ynater</title>
 <style>
+/* ... [Весь CSS из предыдущих версий + новые стили для v1.6.0] ... */
 *{margin:0;padding:0;box-sizing:border-box}
 :root{--bg:#000;--s:#1c1c1e;--s2:#2c2c2e;--t:#fff;--t2:#8e8e93;--a:#fff;--b:rgba(255,255,255,0.1)}
 body{background:transparent;font-family:-apple-system,Segoe UI,Roboto,sans-serif;display:flex;justify-content:center;padding-top:10px;user-select:none;overflow:hidden}
@@ -97,10 +98,11 @@ body{background:transparent;font-family:-apple-system,Segoe UI,Roboto,sans-serif
 .compact-time{transition:transform 0.4s cubic-bezier(0.4,0,0.2,1);transform-origin:center right}
 .island:hover .compact-time{transform:translateX(40px)}
 
-/* Новые стили для v1.4.0 */
+/* Новые стили v1.6.0 */
 .sys-stat{display:flex;align-items:center;gap:8px;margin-bottom:8px}
 .sys-bar{flex:1;height:6px;background:var(--s2);border-radius:3px;overflow:hidden}
 .sys-fill{height:100%;background:var(--a);transition:width 0.5s}
+.sparkline{width:100%;height:40px;margin-top:8px}
 .note-preview{font-size:12px;color:var(--t2);margin-top:4px;max-height:30px;overflow:hidden}
 .search-box{width:100%;padding:10px;background:var(--s);border:1px solid var(--b);border-radius:10px;color:var(--t);margin-bottom:12px;outline:none}
 .search-box:focus{border-color:var(--a)}
@@ -110,13 +112,35 @@ body{background:transparent;font-family:-apple-system,Segoe UI,Roboto,sans-serif
 .markdown-body h1,.markdown-body h2{margin:10px 0;color:var(--a)}
 .markdown-body ul{padding-left:20px}
 .markdown-body strong{color:var(--a)}
+.caps-indicator{position:absolute;top:5px;right:5px;background:#ff9f0a;color:#000;padding:2px 6px;border-radius:4px;font-size:10px;font-weight:bold;display:none}
+.layout-indicator{position:absolute;top:5px;left:5px;background:var(--s2);color:var(--t);padding:2px 6px;border-radius:4px;font-size:10px;font-weight:bold}
+.dnd-overlay{position:absolute;top:0;left:0;width:100%;height:100%;background:rgba(0,0,0,0.8);display:flex;align-items:center;justify-content:center;z-index:100;border-radius:18px;color:var(--a);font-size:18px;font-weight:bold}
+.faq-item{background:var(--s);border-radius:12px;padding:12px;margin-bottom:8px;cursor:pointer}
+.faq-q{font-weight:600;margin-bottom:4px}
+.faq-a{font-size:13px;color:var(--t2);display:none}
+.faq-item.open .faq-a{display:block}
+.scale-slider{width:100%;margin:12px 0}
+.app-launcher{display:grid;grid-template-columns:repeat(4,1fr);gap:8px}
+.app-btn{background:var(--s);border-radius:12px;padding:12px;text-align:center;cursor:pointer;transition:background 0.2s}
+.app-btn:hover{background:var(--s2)}
+.app-icon{font-size:24px;margin-bottom:4px}
+.app-name{font-size:11px}
+.speed-test-btn{width:100%;padding:12px;background:var(--a);border:none;border-radius:12px;color:#000;font-size:16px;font-weight:600;cursor:pointer;margin-top:12px}
+.disk-bar{height:8px;background:var(--s2);border-radius:4px;margin-top:4px;overflow:hidden}
+.disk-fill{height:100%;background:var(--a);transition:width 0.5s}
+.process-list{display:flex;flex-direction:column;gap:4px}
+.process-item{display:flex;justify-content:space-between;padding:8px;background:var(--s);border-radius:8px;font-size:13px}
+.kill-btn{background:none;border:none;color:#ff453a;cursor:pointer;font-size:16px}
 </style>
 </head>
 <body>
 <div class="island">
   <canvas class="gradient-bg" id="gradCanvas"></canvas>
   <div class="timer-alert" id="timerAlert">⏱️ Время вышло!</div>
+  <div class="dnd-overlay" id="dndOverlay" style="display:none">🔕 Не беспокоить</div>
   <div class="cv">
+    <div class="layout-indicator" id="layoutInd">EN</div>
+    <div class="caps-indicator" id="capsInd">CAPS</div>
     <div class="compact-time"><div id="cTime">00:00</div></div>
     <div id="cW"><span id="wI">☀️</span> <span id="wT">--°</span></div>
   </div>
@@ -131,6 +155,7 @@ body{background:transparent;font-family:-apple-system,Segoe UI,Roboto,sans-serif
       <button class="tab" data-tab="notes">📝 Заметки</button>
       <button class="tab" data-tab="timer">⏱️ Таймер</button>
       <button class="tab" data-tab="settings">⚙️ Настройки</button>
+      <button class="tab" data-tab="faq">❓ FAQ</button>
     </div>
     <div class="content" id="content"></div>
   </div>
@@ -142,8 +167,13 @@ let tTime=parseInt(localStorage.getItem('island_timer')||'0'), tInt=null, tRun=f
 let wData=null, sCity=localStorage.getItem('island_city')||'Москва';
 let sCoords=JSON.parse(localStorage.getItem('island_coords')||'{"lat":55.7558,"lon":37.6173}');
 let currentSkin=localStorage.getItem('island_skin')||'cat';
-let sysStats={cpu:0,ram:0,uptime:0,memTotal:0,memFree:0};
-let currencyData={usd:'--',eur:'--',btc:'--'};
+let sysStats={cpu:0,cpuHistory:[],ram:0,uptime:0,memTotal:0,memFree:0,battery:null,gpu:null,cpuTemp:null,disks:[],processes:[]};
+let currencyData={usd:'--',eur:'--'};
+let cryptoData={btc:'--',eth:'--'};
+let dndMode=false, dndEndTime=0;
+let hideInGames=localStorage.getItem('hide_in_games')==='true';
+let hideOnScreenshots=localStorage.getItem('hide_on_screenshots')==='true';
+let islandScale=parseFloat(localStorage.getItem('island_scale'))||1.0;
 const colors=[{n:'Белый',v:'#ffffff'},{n:'Синий',v:'#0a84ff'},{n:'Зеленый',v:'#30d158'},{n:'Оранжевый',v:'#ff9f0a'},{n:'Красный',v:'#ff453a'},{n:'Фиолетовый',v:'#bf5af2'},{n:'Розовый',v:'#ff375f'},{n:'Бирюзовый',v:'#64d2ff'},{n:'Желтый',v:'#ffd60a'},{n:'Индиго',v:'#5e5ce6'},{n:'Мятный',v:'#32d74b'},{n:'Коралловый',v:'#ff6961'}];
 const quotes=[{t:'Каждый день — новый шанс стать лучше.',a:'Неизвестно'},{t:'Успех — это сумма маленьких усилий.',a:'Роберт Кольер'},{t:'Не бойся медлить, бойся остановиться.',a:'Китайская пословица'},{t:'Ты сильнее, чем думаешь.',a:'Неизвестно'},{t:'Дисциплина — мост между целями и достижениями.',a:'Джим Рон'}];
 const skins={
@@ -203,6 +233,15 @@ setSkin(currentSkin);
 island.addEventListener('mouseenter',()=>{mascotEl.classList.remove('sleeping');mascotEl.classList.add('awake');});
 island.addEventListener('mouseleave',()=>{mascotEl.classList.remove('awake');mascotEl.classList.add('sleeping');});
 
+// Отслеживание Caps Lock и раскладки
+document.addEventListener('keydown', (e) => {
+  if(e.getModifierState('CapsLock')) {
+    document.getElementById('capsInd').style.display='block';
+  } else {
+    document.getElementById('capsInd').style.display='none';
+  }
+});
+
 function getGreet(){const h=new Date().getHours();if(h>=5&&h<12)return{t:'Доброе утро',i:'☀️',mood:'happy'};if(h>=12&&h<18)return{t:'Добрый день',i:'🌤️',mood:'neutral'};if(h>=18&&h<23)return{t:'Добрый вечер',i:'🌙',mood:'calm'};return{t:'Доброй ночи',i:'✨',mood:'sleepy'};}
 function getQuote(){const d=Math.floor((new Date()-new Date(new Date().getFullYear(),0,0))/86400000);return quotes[d%quotes.length];}
 function updClock(){document.getElementById('cTime').textContent=new Date().toLocaleTimeString('ru-RU',{hour:'2-digit',minute:'2-digit'});}
@@ -221,7 +260,43 @@ function render(){
     c.innerHTML='<div class="dash"><div class="dc full"><div class="greet">'+g.i+' '+g.t+'</div><div class="greet-sub">'+dt.charAt(0).toUpperCase()+dt.slice(1)+'</div></div><div class="dc"><div class="dt">⚡ Быстрые таймеры</div><div class="qt"><button class="qb" onclick="qTimer(5)"><span class="tm">5</span><span class="lb">минут</span></button><button class="qb" onclick="qTimer(15)"><span class="tm">15</span><span class="lb">минут</span></button><button class="qb" onclick="qTimer(25)"><span class="tm">25</span><span class="lb">минут</span></button></div></div><div class="dc"><div class="dt">📝 Последние заметки</div><div class="rn">'+(rn.length===0?'<div class="ri empty">Нет заметок</div>':rn.map(n=>'<div class="ri">'+n+'</div>').join(''))+'</div></div><div class="dc full"><div class="dt">🌤️ Прогноз на день</div><div class="wf">'+fh+'</div></div><div class="dc full"><div class="quote">"'+q.t+'"<div class="quote-a">— '+q.a+'</div></div></div></div>';
   }
   else if(curTab==='system'){
-    c.innerHTML='<div class="dash"><div class="dc"><div class="dt">🖥️ Процессор</div><div class="sys-stat"><div class="sys-bar"><div class="sys-fill" style="width:'+sysStats.cpu+'%"></div></div><span>'+sysStats.cpu+'%</span></div></div><div class="dc"><div class="dt">💾 Оперативная память</div><div class="sys-stat"><div class="sys-bar"><div class="sys-fill" style="width:'+sysStats.ram+'%"></div></div><span>'+sysStats.ram+'%</span></div><div style="font-size:12px;color:var(--t2);margin-top:4px">'+sysStats.memFree+'/'+sysStats.memTotal+' ГБ свободно</div></div><div class="dc"><div class="dt">⏱️ Аптайм системы</div><div style="font-size:24px;font-weight:600">'+formatUptime(sysStats.uptime)+'</div></div><div class="dc"><div class="dt">💱 Курсы валют (ЦБ)</div><div class="currency-row"><span>🇺🇸 USD</span><span style="font-weight:600">'+currencyData.usd+' ₽</span></div><div class="currency-row"><span>🇪🇺 EUR</span><span style="font-weight:600">'+currencyData.eur+' ₽</span></div><div style="font-size:11px;color:var(--t2);margin-top:8px">Обновляется каждые 5 мин</div></div></div>';
+    let batHtml = sysStats.battery ? `<div class="dc"><div class="dt">🔋 Батарея</div><div class="sys-stat"><div class="sys-bar"><div class="sys-fill" style="width:${sysStats.battery.level}%"></div></div><span>${sysStats.battery.level}%</span></div></div>` : '';
+    let gpuHtml = sysStats.gpu ? `<div class="dc"><div class="dt">🎮 GPU (NVIDIA)</div><div class="sys-stat"><div class="sys-bar"><div class="sys-fill" style="width:${sysStats.gpu.usage}%"></div></div><span>${sysStats.gpu.usage}%</span></div><div style="font-size:12px;color:var(--t2);margin-top:4px">${sysStats.gpu.memUsed}/${sysStats.gpu.memTotal} МБ</div></div>` : '<div class="dc"><div class="dt">🎮 GPU</div><div style="text-align:center;color:var(--t2);padding:20px">N/A (требуется NVIDIA)</div></div>';
+    let tempHtml = sysStats.cpuTemp ? `<div class="dc"><div class="dt">🌡️ Температура CPU</div><div style="font-size:24px;font-weight:600">${sysStats.cpuTemp}°C</div></div>` : '';
+    
+    // Спарклайн CPU
+    let sparklineSvg = '<svg class="sparkline" viewBox="0 0 60 40" preserveAspectRatio="none">';
+    const maxCpu = Math.max(...sysStats.cpuHistory, 1);
+    sysStats.cpuHistory.forEach((val, i) => {
+      const x = i;
+      const y = 40 - (val / maxCpu) * 40;
+      sparklineSvg += `<line x1="${x}" y1="${y}" x2="${x+1}" y2="${40 - (sysStats.cpuHistory[i+1] || val) / maxCpu * 40}" stroke="var(--a)" stroke-width="1"/>`;
+    });
+    sparklineSvg += '</svg>';
+    
+    // Диски
+    let disksHtml = sysStats.disks.map(d => {
+      const usedPercent = Math.round((d.used / d.total) * 100);
+      return `<div class="dc"><div class="dt">💾 ${d.name}</div><div style="font-size:12px;color:var(--t2)">${d.free} ГБ свободно из ${d.total} ГБ</div><div class="disk-bar"><div class="disk-fill" style="width:${usedPercent}%"></div></div></div>`;
+    }).join('');
+    
+    // Процессы
+    let processesHtml = sysStats.processes.map(p => 
+      `<div class="process-item"><span>${p.name}</span><span>${p.cpu.toFixed(1)}%</span></div>`
+    ).join('');
+    
+    c.innerHTML=`<div class="dash">
+      <div class="dc"><div class="dt">🖥️ Процессор</div><div class="sys-stat"><div class="sys-bar"><div class="sys-fill" style="width:${sysStats.cpu}%"></div></div><span>${sysStats.cpu}%</span></div>${sparklineSvg}</div>
+      <div class="dc"><div class="dt">💾 Оперативная память</div><div class="sys-stat"><div class="sys-bar"><div class="sys-fill" style="width:${sysStats.ram}%"></div></div><span>${sysStats.ram}%</span></div><div style="font-size:12px;color:var(--t2);margin-top:4px">${sysStats.memFree}/${sysStats.memTotal} ГБ свободно</div></div>
+      ${gpuHtml}
+      ${batHtml}
+      ${tempHtml}
+      <div class="dc"><div class="dt">⏱️ Аптайм системы</div><div style="font-size:24px;font-weight:600">${formatUptime(sysStats.uptime)}</div></div>
+      <div class="dc"><div class="dt">💱 Курсы валют (ЦБ)</div><div class="currency-row"><span>🇺🇸 USD</span><span style="font-weight:600">${currencyData.usd} ₽</span></div><div class="currency-row"><span>🇪🇺 EUR</span><span style="font-weight:600">${currencyData.eur} ₽</span></div><div class="currency-row"><span>₿ BTC</span><span style="font-weight:600">${cryptoData.btc} $</span></div><div class="currency-row"><span>Ξ ETH</span><span style="font-weight:600">${cryptoData.eth} $</span></div><div style="font-size:11px;color:var(--t2);margin-top:8px">Обновляется каждые 5 мин</div></div>
+      ${disksHtml}
+      <div class="dc full"><div class="dt">📊 Топ-5 процессов</div><div class="process-list">${processesHtml}</div></div>
+      <button class="speed-test-btn" onclick="runSpeedTest()">🌐 Тест скорости интернета</button>
+    </div>`;
   }
   else if(curTab==='music'){c.innerHTML='<div class="upload" onclick="document.getElementById(\'fIn\').click()"><input type="file" id="fIn" accept="audio/*" onchange="playM(this)"><div style="font-size:40px;margin-bottom:12px">📁</div><div style="font-size:16px;font-weight:600">Нажмите, чтобы выбрать MP3</div><div style="font-size:13px;color:var(--t2);margin-top:8px">Локальное воспроизведение</div></div><div id="mP"></div>';}
   else if(curTab==='weather'){
@@ -252,7 +327,39 @@ function render(){
   else if(curTab==='settings'){
     const ca=getComputedStyle(document.documentElement).getPropertyValue('--a').trim();
     const skinNames={cat:'🐱 Котик',robot:'🤖 Робот',fox:'🦊 Лиса',ghost:'👻 Призрак',capybara:'🥔 Капибара',panda:'🐼 Панда',alien:'👽 Инопланетянин',heart:'❤️ Сердечко'};
-    c.innerHTML='<div class="ss"><div class="st">🎨 Цвет акцента (12 цветов)</div><div class="cp">'+colors.map(col=>'<div class="co '+(col.v.toLowerCase()===ca.toLowerCase()?'active':'')+'" style="background:'+col.v+'" data-color="'+col.v+'" title="'+col.n+'" onclick="setA(\''+col.v+'\',this)"></div>').join('')+'</div><div style="margin-top:12px;font-size:12px;color:var(--t2)">Выбрано: <span id="cCN" style="color:var(--a);font-weight:600">'+cN(ca)+'</span></div></div><div class="ss"><div class="st">🎭 Скин компаньона</div><div class="skin-grid">'+Object.keys(skins).map(k=>'<div class="skin-option '+(k===currentSkin?'active':'')+'" onclick="setSkin(\''+k+'\')" title="'+skinNames[k]+'">'+skinNames[k].split(' ')[0]+'</div>').join('')+'</div><div style="margin-top:8px;font-size:12px;color:var(--t2)">Текущий: '+skinNames[currentSkin]+'</div></div><div class="ss"><div class="st">🌍 Город для погоды</div><input type="text" class="ni" id="cIn" value="'+sCity+'" placeholder="Введите город"><button class="tb" onclick="chCity()" style="width:100%;margin-top:8px">Сохранить</button></div>';
+    c.innerHTML=`<div class="ss"><div class="st">🎨 Цвет акцента (12 цветов)</div><div class="cp">'+colors.map(col=>'<div class="co '+(col.v.toLowerCase()===ca.toLowerCase()?'active':'')+'" style="background:'+col.v+'" data-color="'+col.v+'" title="'+col.n+'" onclick="setA(\''+col.v+'\',this)"></div>').join('')+'</div><div style="margin-top:12px;font-size:12px;color:var(--t2)">Выбрано: <span id="cCN" style="color:var(--a);font-weight:600">'+cN(ca)+'</span></div></div>
+    <div class="ss"><div class="st">🎭 Скин компаньона</div><div class="skin-grid">'+Object.keys(skins).map(k=>'<div class="skin-option '+(k===currentSkin?'active':'')+'" onclick="setSkin(\''+k+'\')" title="'+skinNames[k]+'">'+skinNames[k].split(' ')[0]+'</div>').join('')+'</div><div style="margin-top:8px;font-size:12px;color:var(--t2)">Текущий: '+skinNames[currentSkin]+'</div></div>
+    <div class="ss"><div class="st">📐 Масштаб острова (${Math.round(islandScale*100)}%)</div><input type="range" class="scale-slider" min="0.8" max="1.3" step="0.05" value="'+islandScale+'" oninput="setScale(this.value)"></div>
+    <div class="ss"><div class="st">🎮 Поведение</div>
+      <label style="display:flex;align-items:center;gap:8px;margin-bottom:8px;cursor:pointer"><input type="checkbox" ${hideInGames?'checked':''} onchange="toggleHideInGames(this.checked)"> Скрывать в играх/полноэкранном режиме</label>
+      <label style="display:flex;align-items:center;gap:8px;margin-bottom:8px;cursor:pointer"><input type="checkbox" ${hideOnScreenshots?'checked':''} onchange="toggleHideOnScreenshots(this.checked)"> Скрывать на скриншотах</label>
+    </div>
+    <div class="ss"><div class="st">🔕 Не беспокоить</div>
+      <div style="display:flex;gap:8px;margin-bottom:12px">
+        <button class="tb sec" onclick="setDND(30)">30 мин</button>
+        <button class="tb sec" onclick="setDND(60)">1 ч</button>
+        <button class="tb sec" onclick="setDND(120)">2 ч</button>
+        <button class="tb" onclick="disableDND()" style="background:#ff453a;color:white">Выкл</button>
+      </div>
+      <div style="font-size:12px;color:var(--t2)">${dndMode ? 'Активен до: '+new Date(dndEndTime).toLocaleTimeString() : 'Выключен'}</div>
+    </div>
+    <div class="ss"><div class="st">🚀 Быстрый запуск</div>
+      <div class="app-launcher">
+        <div class="app-btn" onclick="launchApp('discord')"><div class="app-icon">💬</div><div class="app-name">Discord</div></div>
+        <div class="app-btn" onclick="launchApp('telegram')"><div class="app-icon">✈️</div><div class="app-name">Telegram</div></div>
+        <div class="app-btn" onclick="launchApp('chrome')"><div class="app-icon">🌐</div><div class="app-name">Chrome</div></div>
+        <div class="app-btn" onclick="launchApp('vscode')"><div class="app-icon">💻</div><div class="app-name">VS Code</div></div>
+      </div>
+    </div>
+    <div class="ss"><div class="st">🌍 Город для погоды</div><input type="text" class="ni" id="cIn" value="'+sCity+'" placeholder="Введите город"><button class="tb" onclick="chCity()" style="width:100%;margin-top:8px">Сохранить</button></div>`;
+  }
+  else if(curTab==='faq'){
+    c.innerHTML=`<div class="faq-item" onclick="this.classList.toggle('open')"><div class="faq-q">❓ Это бесплатно?</div><div class="faq-a">Да, Ynater полностью бесплатен и имеет открытый исходный код на GitHub.</div></div>
+    <div class="faq-item" onclick="this.classList.toggle('open')"><div class="faq-q">🦠 Есть ли вирусы?</div><div class="faq-a">Нет, код открыт и проверен сообществом. Вы можете собрать установщик самостоятельно из исходников.</div></div>
+    <div class="faq-item" onclick="this.classList.toggle('open')"><div class="faq-q">🐧 Есть версия для Linux?</div><div class="faq-a">Пока только Windows 10 и 11. Версия для Linux планируется в будущем.</div></div>
+    <div class="faq-item" onclick="this.classList.toggle('open')"><div class="faq-q">💾 Сколько памяти использует?</div><div class="faq-a">Как пара вкладок браузера (~100-200 МБ RAM).</div></div>
+    <div class="faq-item" onclick="this.classList.toggle('open')"><div class="faq-q">🎮 Скрывается ли в играх?</div><div class="faq-a">Да, если включить опцию "Скрывать в играх" в настройках.</div></div>
+    <div class="faq-item" onclick="this.classList.toggle('open')"><div class="faq-q">🗑️ Как удалить?</div><div class="faq-a">Настройки → Поведение → Удалить, или через Панель управления Windows.</div></div>`;
   }
 }
 
@@ -270,6 +377,24 @@ window.resT=function(){clearInterval(tInt);tRun=false;tTime=0;localStorage.setIt
 window.setT=function(m){tTime=m*60;localStorage.setItem('island_timer',tTime);render();};
 window.setA=function(col,el){document.documentElement.style.setProperty('--a',col);localStorage.setItem('island_a',col);document.querySelectorAll('.co').forEach(e=>e.classList.remove('active'));el.classList.add('active');const n=document.getElementById('cCN');if(n)n.textContent=cN(col);};
 window.chCity=async function(){const inp=document.getElementById('cIn');if(inp&&inp.value.trim()){try{const r=await ipcRenderer.invoke('geocode-city',inp.value.trim());sCity=r.name;sCoords={lat:r.lat,lon:r.lon};localStorage.setItem('island_city',sCity);localStorage.setItem('island_coords',JSON.stringify(sCoords));wData=null;render();}catch(e){alert('Город не найден');}}};
+window.setScale=function(val){islandScale=parseFloat(val);localStorage.setItem('island_scale',islandScale);ipcRenderer.send('set-scale',islandScale);render();};
+window.toggleHideInGames=function(val){hideInGames=val;localStorage.setItem('hide_in_games',val);ipcRenderer.send('set-hide-in-games',val);};
+window.toggleHideOnScreenshots=function(val){hideOnScreenshots=val;localStorage.setItem('hide_on_screenshots',val);ipcRenderer.send('set-hide-on-screenshots',val);};
+window.setDND=function(min){dndMode=true;dndEndTime=Date.now()+min*60000;document.getElementById('dndOverlay').style.display='flex';setTimeout(()=>{disableDND();},min*60000);render();};
+window.disableDND=function(){dndMode=false;dndEndTime=0;document.getElementById('dndOverlay').style.display='none';render();};
+window.launchApp=function(name){ipcRenderer.invoke('launch-app',name);};
+window.runSpeedTest=async function(){
+  const btn=document.querySelector('.speed-test-btn');
+  btn.textContent='🔄 Тестирую...';
+  btn.disabled=true;
+  try{
+    const speed=await ipcRenderer.invoke('speed-test');
+    btn.textContent=`🌐 Скорость: ${speed} Мбит/с`;
+  }catch(e){
+    btn.textContent='❌ Ошибка теста';
+  }
+  setTimeout(()=>{btn.textContent='🌐 Тест скорости интернета';btn.disabled=false;},5000);
+};
 function cN(h){const c=colors.find(p=>p.v.toLowerCase()===h.toLowerCase());return c?c.n:h;}
 function wD(c){const d={0:'Ясно',1:'Преим. ясно',2:'Облачно',3:'Пасмурно',45:'Туман',51:'Морось',61:'Дождь',71:'Снег',80:'Ливень',95:'Гроза'};return d[c]||'Неизвестно';}
 function wIc(c){if(c===0)return'☀️';if(c<=3)return'⛅';if(c<=48)return'🌫️';if(c<=67)return'🌧️';if(c<=77)return'🌨️';if(c>=95)return'⛈️';return'🌥️';}
@@ -278,6 +403,7 @@ ipcRenderer.invoke('get-clip').then(h=>{clipHist=h;if(curTab==='clipboard')rende
 ipcRenderer.on('clip-update',(e,h)=>{clipHist=h;if(curTab==='clipboard')render();});
 ipcRenderer.on('sys-stats',(e,s)=>{sysStats=s;if(curTab==='system')render();});
 ipcRenderer.on('currency-data',(e,d)=>{currencyData=d;if(curTab==='system')render();});
+ipcRenderer.on('crypto-data',(e,d)=>{cryptoData=d;if(curTab==='system')render();});
 loadW();setInterval(loadW,10*60*1000);
 const sa=localStorage.getItem('island_a');if(sa)document.documentElement.style.setProperty('--a',sa);
 window.switchTab=function(n){const t=document.querySelector('.tab[data-tab="'+n+'"]');if(t)t.click();};
